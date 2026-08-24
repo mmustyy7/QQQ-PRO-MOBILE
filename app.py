@@ -440,6 +440,14 @@ def build_decision_reason(
         "NEUTRAL",
     )
 
+    # Pattern motoru BULLISH/BEARISH, karar motoru CALL/PUT dili kullanır.
+    pattern_side = {
+        "BULLISH": "CALL",
+        "CALL": "CALL",
+        "BEARISH": "PUT",
+        "PUT": "PUT",
+    }.get(pattern_bias, "NEUTRAL")
+
     final_score = safe_float(
         decision.get("final_score"),
         0.0,
@@ -495,7 +503,7 @@ def build_decision_reason(
             f"{final_score:.1f}; giriş için yeterli değil."
         )
 
-    if pattern_bias not in {"NEUTRAL", "", dominant}:
+    if pattern_side not in {"NEUTRAL", dominant}:
         return (
             f"{dominant} yönü baskın fakat Pattern Engine "
             f"{pattern_bias} yönünde karşı teyit üretiyor."
@@ -1120,7 +1128,7 @@ st.title("🚀 QQQ PRO v6 SON SÜRÜM CANLI")
 st.caption(
     "0DTE Opsiyon Karar Paneli | "
     "Son Doğrulanan Sistem | "
-    "Karar Motoru v5.8.2 | Dönüş Teyidi v1.3.1 | İşlem Yöneticisi v6.1"
+    "Karar Motoru v5.8.13 | Dönüş Teyidi v1.3.3 | İşlem Yöneticisi v6.4"
 )
 
 

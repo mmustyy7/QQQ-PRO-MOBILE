@@ -64,10 +64,14 @@ def _minutes_between(now: pd.Timestamp, then: Any) -> int:
 
 
 def calculate_features(df_1m: pd.DataFrame) -> Dict[str, Any]:
-    """Only closed/current historical bars supplied by the caller are used."""
+    """Önceki seans ısınmasıyla açılışın ilk dakikalarını da değerlendirir."""
     df = _normalize_df(df_1m)
     if len(df) < 22:
-        return {"valid": False, "reason": "MINIMUM_22_BARS_REQUIRED"}
+        return {
+            "valid": False,
+            "reason": "MINIMUM_22_TOTAL_BARS_REQUIRED",
+            "available_bars": len(df),
+        }
 
     close = df["Close"]
     high = df["High"]
@@ -75,9 +79,21 @@ def calculate_features(df_1m: pd.DataFrame) -> Dict[str, Any]:
     volume = df["Volume"].fillna(0.0)
     ema9 = close.ewm(span=9, adjust=False).mean()
     ema21 = close.ewm(span=21, adjust=False).mean()
-    typical = (high + low + close) / 3.0
-    cumulative_volume = volume.cumsum().replace(0, np.nan)
-    vwap = (typical * volume).cumsum() / cumulative_volume
+    # EMA önceki seans barlarıyla ısınır; VWAP her seansta sıfırlanır.
+    latest_date = df.index[-1].date()
+    session_mask = np.asarray(df.index.date == latest_date)
+    session_df = df.loc[session_mask]
+    session_typical = (
+        session_df["High"]
+        + session_df["Low"]
+        + session_df["Close"]
+    ) / 3.0
+    session_volume = session_df["Volume"].fillna(0.0)
+    cumulative_volume = session_volume.cumsum().replace(0, np.nan)
+    session_vwap = (
+        (session_typical * session_volume).cumsum()
+        / cumulative_volume
+    )
 
     price = _safe_float(close.iloc[-1])
     previous = _safe_float(close.iloc[-2])
@@ -88,7 +104,7 @@ def calculate_features(df_1m: pd.DataFrame) -> Dict[str, Any]:
     momentum_acceleration = momentum_3 - (
         _safe_float(close.iloc[-4]) - _safe_float(close.iloc[-7])
     )
-    vwap_now = _safe_float(vwap.iloc[-1], price)
+    vwap_now = _safe_float(session_vwap.iloc[-1], price)
     avg_volume = _safe_float(volume.iloc[-21:-1].mean(), 0.0)
     volume_ratio = _safe_float(volume.iloc[-1]) / avg_volume if avg_volume > 0 else 0.0
 
@@ -102,6 +118,8 @@ def calculate_features(df_1m: pd.DataFrame) -> Dict[str, Any]:
 
     return {
         "valid": True,
+        "history_bars": len(df),
+        "session_bars": len(session_df),
         "timestamp": df.index[-1],
         "price": price,
         "ema9": ema9_now,

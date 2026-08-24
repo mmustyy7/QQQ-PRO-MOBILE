@@ -52,7 +52,9 @@ DEFAULT_SYMBOL = "QQQ"
 TIMEFRAMES = {
     "1m": {
         "interval": "1m",
-        "period": "1d",
+        # Açılışın ilk dakikalarında EMA/Radar hesaplarının önceki
+        # seans barlarıyla ısınabilmesi için yalnız bugünü istemiyoruz.
+        "period": "5d",
     },
     "5m": {
         "interval": "5m",
@@ -162,6 +164,10 @@ def _empty_market_data(symbol=DEFAULT_SYMBOL):
         "price": 0.0,
         "volume": 0,
 
+        "previous_close": 0.0,
+        "session_open": 0.0,
+        "today_open": 0.0,
+
         "df_1m": pd.DataFrame(),
         "df_5m": pd.DataFrame(),
         "df_15m": pd.DataFrame(),
@@ -178,6 +184,100 @@ def _empty_market_data(symbol=DEFAULT_SYMBOL):
             "5m": False,
             "15m": False,
         },
+    }
+
+
+def _new_york_index(df):
+    """DatetimeIndex'i seans referansları için New York saatine çevirir."""
+
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame()
+
+    data = df.copy()
+
+    if not isinstance(data.index, pd.DatetimeIndex):
+        return pd.DataFrame()
+
+    try:
+        if data.index.tz is None:
+            data.index = data.index.tz_localize(NEW_YORK_TZ)
+        else:
+            data.index = data.index.tz_convert(NEW_YORK_TZ)
+    except Exception:
+        return pd.DataFrame()
+
+    return data.sort_index()
+
+
+def _regular_session_rows(df):
+    """Yalnız 09:30-15:59 ET normal seans barlarını döndürür."""
+
+    data = _new_york_index(df)
+
+    if data.empty:
+        return data
+
+    try:
+        return data.between_time(
+            "09:30",
+            "15:59:59",
+            inclusive="both",
+        )
+    except TypeError:
+        return data.between_time("09:30", "15:59:59")
+    except Exception:
+        return pd.DataFrame()
+
+
+def extract_session_reference_prices(market, now=None):
+    """Gerçek önceki kapanış ve bugünkü normal seans açılışını çıkarır."""
+
+    now_ny = now or datetime.now(NEW_YORK_TZ)
+
+    if now_ny.tzinfo is None:
+        now_ny = now_ny.replace(tzinfo=NEW_YORK_TZ)
+    else:
+        now_ny = now_ny.astimezone(NEW_YORK_TZ)
+
+    today = now_ny.date()
+    session_open = 0.0
+    previous_close = 0.0
+
+    for key in ("df_1m", "df_5m", "df_15m"):
+        regular = _regular_session_rows(market.get(key))
+        if regular.empty:
+            continue
+
+        today_rows = regular[regular.index.date == today]
+        if not today_rows.empty:
+            session_open = safe_float(today_rows["Open"].iloc[0], 0.0)
+            if session_open > 0:
+                break
+
+    for key in ("df_5m", "df_15m", "df_1m"):
+        regular = _regular_session_rows(market.get(key))
+        if regular.empty:
+            continue
+
+        prior_rows = regular[regular.index.date < today]
+        if prior_rows.empty:
+            continue
+
+        latest_prior_date = max(prior_rows.index.date)
+        latest_prior_rows = prior_rows[
+            prior_rows.index.date == latest_prior_date
+        ]
+        previous_close = safe_float(
+            latest_prior_rows["Close"].iloc[-1],
+            0.0,
+        )
+        if previous_close > 0:
+            break
+
+    return {
+        "previous_close": previous_close,
+        "session_open": session_open,
+        "today_open": session_open,
     }
 
 
@@ -907,6 +1007,10 @@ def build_market_data(
         "price": 0.0,
         "volume": 0,
 
+        "previous_close": 0.0,
+        "session_open": 0.0,
+        "today_open": 0.0,
+
         "df_1m": pd.DataFrame(),
         "df_5m": pd.DataFrame(),
         "df_15m": pd.DataFrame(),
@@ -1004,6 +1108,14 @@ def build_market_data(
                 continue
 
     market["volume"] = volume
+
+    # GAP hesabı için açık seans referanslarını tek kaynaktan üret.
+    market.update(
+        extract_session_reference_prices(
+            market,
+            now=datetime.now(NEW_YORK_TZ),
+        )
+    )
 
     # ========================================================
     # DATA VALIDATION
