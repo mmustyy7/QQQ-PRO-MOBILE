@@ -368,9 +368,18 @@ def _calculate_gap_fill(
 
         return result
 
-    current_distance = abs(
-        current_price
-        - previous_close
+    # Fiyat önceki kapanış çizgisini geçtiyse gap tamamen dolmuştur.
+    # Mutlak mesafe kullanmak, çizginin ötesine geçen fiyatı yanlışlıkla
+    # yeniden "dolmamış" gösterebilir.
+    crossed_previous_close = bool(
+        (opening_gap > 0 and current_price <= previous_close)
+        or (opening_gap < 0 and current_price >= previous_close)
+    )
+
+    current_distance = (
+        0.0
+        if crossed_previous_close
+        else abs(current_price - previous_close)
     )
 
     fill_percent = (
@@ -389,10 +398,7 @@ def _calculate_gap_fill(
         )
     )
 
-    remaining = abs(
-        current_price
-        - previous_close
-    )
+    remaining = current_distance
 
     remaining_percent = (
         remaining
@@ -413,9 +419,9 @@ def _calculate_gap_fill(
         / 100.0
     )
 
-    fully_filled = (
-        current_distance
-        <= tolerance
+    fully_filled = bool(
+        crossed_previous_close
+        or current_distance <= tolerance
     )
 
     moving_toward_fill = False

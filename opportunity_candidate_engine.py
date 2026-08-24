@@ -105,8 +105,21 @@ def calculate_features(df_1m: pd.DataFrame) -> Dict[str, Any]:
         _safe_float(close.iloc[-4]) - _safe_float(close.iloc[-7])
     )
     vwap_now = _safe_float(session_vwap.iloc[-1], price)
-    avg_volume = _safe_float(volume.iloc[-21:-1].mean(), 0.0)
-    volume_ratio = _safe_float(volume.iloc[-1]) / avg_volume if avg_volume > 0 else 0.0
+    # Yahoo oluşmakta olan son 1m barı bazen Volume=0 döndürür. Yalnız bu
+    # durumda bir önceki tamamlanmış barı kullan; sıfırı gerçek hacim sanma.
+    current_volume = _safe_float(volume.iloc[-1])
+    volume_source = "CURRENT_BAR"
+    volume_history = volume.iloc[-21:-1]
+    if current_volume <= 0 and len(volume) >= 2:
+        previous_volume = _safe_float(volume.iloc[-2])
+        if previous_volume > 0:
+            current_volume = previous_volume
+            volume_source = "PREVIOUS_COMPLETED_BAR"
+            volume_history = volume.iloc[-22:-2]
+
+    positive_history = volume_history[volume_history > 0]
+    avg_volume = _safe_float(positive_history.mean(), 0.0)
+    volume_ratio = current_volume / avg_volume if avg_volume > 0 else 0.0
 
     prior_high = _safe_float(high.iloc[-11:-1].max())
     prior_low = _safe_float(low.iloc[-11:-1].min())
@@ -129,6 +142,7 @@ def calculate_features(df_1m: pd.DataFrame) -> Dict[str, Any]:
         "momentum_3": momentum_3,
         "momentum_acceleration": momentum_acceleration,
         "volume_ratio": volume_ratio,
+        "volume_source": volume_source,
         "breakout_up": bool(breakout_up),
         "breakout_down": bool(breakout_down),
         "support_rejection": bool(support_rejection),
