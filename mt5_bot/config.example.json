@@ -1,0 +1,28 @@
+{
+  "symbols": [
+    "US100",
+    "US500"
+  ],
+  "timeframe": "M15",
+  "history_bars": 400,
+  "ema_fast": 50,
+  "ema_slow": 200,
+  "breakout_bars": 20,
+  "atr_period": 14,
+  "sl_atr": 1.5,
+  "tp_atr": 3.0,
+  "allow_short": true,
+  "risk_per_trade_pct": 0.5,
+  "max_daily_loss_pct": 2.0,
+  "max_open_positions": 2,
+  "max_trades_per_day": 4,
+  "entry_start_ny": "09:45",
+  "entry_end_ny": "15:30",
+  "close_eod": true,
+  "close_eod_ny": "15:55",
+  "server_minus_ny_hours": 7,
+  "magic": 2611401,
+  "deviation_points": 20,
+  "backtest_spread_points": 1.0,
+  "poll_seconds": 10
+}

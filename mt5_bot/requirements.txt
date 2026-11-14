@@ -1,0 +1,4 @@
+# MT5 botu yalnızca Windows'ta, MetaTrader 5 terminali açıkken çalışır.
+pandas>=2.0
+numpy>=1.24
+MetaTrader5>=5.0.45; sys_platform == "win32"

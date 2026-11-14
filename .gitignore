@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+mt5_bot/logs/
+mt5_bot/config.json
+mt5_bot/STOP
